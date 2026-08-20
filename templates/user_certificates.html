@@ -1,0 +1,249 @@
+{{ define "user_certificates.html" }}
+{{ template "header" . }}
+
+<div class="space-y-6">
+    <!-- Header banner -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-file-contract text-brand-400"></i> Certificates
+            </h2>
+            <p class="text-sm text-slate-400">Issue new leaf certificates or view credentials signed across the environment.</p>
+        </div>
+        {{ if .hasActiveCA }}
+        <button onclick="openIssueModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-sm font-semibold flex items-center gap-2 shadow-lg shadow-brand-600/20 transition animate-pulse-subtle">
+            <i class="fa-solid fa-circle-plus"></i> Issue Certificate
+        </button>
+        {{ else }}
+        <div class="px-4 py-2 bg-amber-950/40 border border-amber-500/20 text-amber-400 rounded-lg text-sm font-medium flex items-center gap-2">
+            <i class="fa-solid fa-circle-exclamation"></i> Contact Admin to activate an Intermediate CA
+        </div>
+        {{ end }}
+    </div>
+
+    <!-- Certificate List -->
+    <div class="glass-card rounded-xl overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-800 bg-slate-900/50">
+                        <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Common Name</th>
+                        {{ if eq .user.Role "admin" }}
+                        <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Owner</th>
+                        {{ end }}
+                        <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Signed By</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Serial Number</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Expires At</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Downloads & Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 font-medium">
+                    {{ if not .certificates }}
+                    <tr>
+                        <td colspan="{{ if eq .user.Role "admin" }}6{{ else }}5{{ end }}" class="px-6 py-8 text-center text-slate-500 text-sm">
+                            <i class="fa-solid fa-box-open text-2xl mb-2 block text-slate-600"></i>
+                            No certificates issued yet.
+                        </td>
+                    </tr>
+                    {{ else }}
+                    {{ range .certificates }}
+                    <tr class="hover:bg-slate-900/30 transition text-sm">
+                        <td class="px-6 py-4">
+                            <div class="font-semibold text-slate-200">{{ .CommonName }}</div>
+                            {{ if .SANs }}
+                            <div class="text-[10px] text-slate-500 mt-0.5 truncate max-w-xs font-mono" title="{{ range .SANs }}{{ . }}, {{ end }}">
+                                SANs: {{ range $i, $e := .SANs }}{{ if $i }}, {{ end }}{{ $e }}{{ end }}
+                            </div>
+                            {{ end }}
+                        </td>
+                        {{ if eq $.user.Role "admin" }}
+                        <td class="px-6 py-4 text-slate-300 font-normal">
+                            <i class="fa-solid fa-user-tag text-xs text-slate-500 mr-1"></i> {{ .User.Username }}
+                        </td>
+                        {{ end }}
+                        <td class="px-6 py-4 text-slate-400 text-xs">
+                            <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono text-slate-400">{{ .CA.CommonName }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-slate-400 font-mono text-xs truncate max-w-[120px]" title="{{ .SerialNumber }}">{{ .SerialNumber }}</td>
+                        <td class="px-6 py-4 text-slate-300 text-xs">
+                            <div class="font-mono">{{ .NotAfter.Format "2006-01-02" }}</div>
+                            {{ if .NotAfter.Before now }}
+                            <span class="text-[9px] font-bold text-red-400 uppercase tracking-wider mt-0.5 block">Expired</span>
+                            {{ else }}
+                            <span class="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mt-0.5 block">Valid</span>
+                            {{ end }}
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="inline-flex items-center gap-1.5">
+                                <a href="/certificates/download/{{ .ID }}" class="px-2 py-1.5 rounded-lg border border-brand-500/20 bg-brand-950/20 hover:bg-brand-600 text-brand-400 hover:text-white text-xs font-semibold transition flex items-center gap-1" title="Download ZIP Bundle">
+                                    <i class="fa-solid fa-file-zipper"></i> ZIP
+                                </a>
+                                
+                                <div class="relative inline-block text-left" id="dd-container-{{ .ID }}">
+                                    <button onclick="toggleDropdown('{{ .ID }}')" class="p-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="More Downloads">
+                                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                                    </button>
+                                    
+                                    <!-- Dropdown menu -->
+                                    <div id="dd-menu-{{ .ID }}" class="hidden origin-top-right absolute right-0 mt-2 w-40 rounded-lg bg-slate-900 border border-slate-800 shadow-xl z-10 p-1 text-left text-xs divide-y divide-slate-800/80">
+                                        <a href="/certificates/download/{{ .ID }}?format=cert" class="block px-3 py-2 rounded-md text-slate-300 hover:bg-slate-800 transition">
+                                            <i class="fa-solid fa-certificate text-indigo-400 mr-2"></i> Cert Only (.crt)
+                                        </a>
+                                        {{ if .KeyPEM }}
+                                        <a href="/certificates/download/{{ .ID }}?format=key" class="block px-3 py-2 rounded-md text-slate-300 hover:bg-slate-800 transition">
+                                            <i class="fa-solid fa-key text-amber-400 mr-2"></i> Key Only (.key)
+                                        </a>
+                                        {{ end }}
+                                        <a href="/certificates/download/{{ .ID }}?format=ca" class="block px-3 py-2 rounded-md text-slate-300 hover:bg-slate-800 transition">
+                                            <i class="fa-solid fa-building-shield text-slate-400 mr-2"></i> CA Cert Only
+                                        </a>
+                                        <a href="/certificates/download/{{ .ID }}?format=fullchain" class="block px-3 py-2 rounded-md text-slate-300 hover:bg-slate-800 transition">
+                                            <i class="fa-solid fa-file-lines text-emerald-400 mr-2"></i> Nginx Bundle (.crt)
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <form action="/certificates/delete/{{ .ID }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to delete this certificate record? This does not revoke the signed crypto key itself, but deletes the config/PEM metadata on the server.')">
+                                    <button type="submit" class="p-1.5 rounded-lg border border-red-500/20 bg-red-950/20 hover:bg-red-500 hover:text-white text-red-400 transition" title="Delete Record">
+                                        <i class="fa-solid fa-trash-can text-xs"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {{ end }}
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Issue Certificate Modal -->
+    <div id="issue-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-6 glow-brand">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+                <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-signature text-brand-400"></i> Issue Leaf Certificate
+                </h3>
+                <button onclick="closeIssueModal()" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <!-- Tabs inside modal to switch between Server Key and Upload CSR -->
+            <div class="flex border-b border-slate-800 mb-4 text-xs font-semibold uppercase tracking-wide">
+                <button onclick="switchTab('srv')" id="tab-srv" class="flex-1 py-2 text-center text-brand-400 border-b-2 border-brand-500">Generate Keys on Server</button>
+                <button onclick="switchTab('csr')" id="tab-csr" class="flex-1 py-2 text-center text-slate-500 border-b border-transparent">Use Custom CSR</button>
+            </div>
+
+            <form action="/certificates/issue" method="POST" class="space-y-4">
+                <!-- Server Key Fields -->
+                <div id="fields-srv" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Common Name (CN)</label>
+                        <input type="text" name="common_name" id="cn-input" required placeholder="example.com" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Subject Alternative Names (SANs) - comma or line separated</label>
+                        <textarea name="sans" placeholder="www.example.com&#10;api.example.com&#10;192.168.1.100" rows="3" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm font-mono"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Validity (Days)</label>
+                            <input type="number" name="validity_days" required value="365" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Key Type</label>
+                            <select name="key_type" required class="w-full px-3 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-brand-500 transition text-sm">
+                                <option value="ecdsa">ECDSA P-256 (Fast/Modern)</option>
+                                <option value="rsa2048">RSA 2048 (Legacy)</option>
+                                <option value="rsa4096">RSA 4096 (Secure)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CSR Fields (Hidden by default) -->
+                <div id="fields-csr" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">CSR PEM Content</label>
+                        <textarea name="csr" id="csr-input" placeholder="-----BEGIN CERTIFICATE REQUEST-----&#10;...&#10;-----END CERTIFICATE REQUEST-----" rows="6" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm font-mono"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Validity (Days)</label>
+                        <input type="number" name="validity_days_csr" value="365" disabled class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-500 transition text-sm">
+                        <!-- Validity days must be passed via same input name or we adjust in form submit -->
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeIssueModal()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 font-medium text-sm transition text-slate-300">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm shadow-lg shadow-brand-600/20 transition">Sign Certificate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openIssueModal() {
+        document.getElementById('issue-modal').classList.remove('hidden');
+    }
+    function closeIssueModal() {
+        document.getElementById('issue-modal').classList.add('hidden');
+    }
+
+    // Modal click-off
+    document.getElementById('issue-modal').onclick = function(e) {
+        if(e.target === this) closeIssueModal();
+    }
+
+    // Tab switcher inside modal
+    function switchTab(mode) {
+        const tabSrv = document.getElementById('tab-srv');
+        const tabCsr = document.getElementById('tab-csr');
+        const fieldsSrv = document.getElementById('fields-srv');
+        const fieldsCsr = document.getElementById('fields-csr');
+        const cnInput = document.getElementById('cn-input');
+        const csrInput = document.getElementById('csr-input');
+
+        if (mode === 'srv') {
+            tabSrv.className = "flex-1 py-2 text-center text-brand-400 border-b-2 border-brand-500";
+            tabCsr.className = "flex-1 py-2 text-center text-slate-500 border-b border-transparent";
+            fieldsSrv.classList.remove('hidden');
+            fieldsCsr.classList.add('hidden');
+            cnInput.setAttribute('required', 'true');
+            csrInput.removeAttribute('required');
+        } else {
+            tabSrv.className = "flex-1 py-2 text-center text-slate-500 border-b border-transparent";
+            tabCsr.className = "flex-1 py-2 text-center text-brand-400 border-b-2 border-brand-500";
+            fieldsSrv.classList.add('hidden');
+            fieldsCsr.classList.remove('hidden');
+            cnInput.removeAttribute('required');
+            csrInput.setAttribute('required', 'true');
+        }
+    }
+
+    // Dropdown toggle function
+    function toggleDropdown(id) {
+        const menu = document.getElementById('dd-menu-' + id);
+        const allMenus = document.querySelectorAll('[id^="dd-menu-"]');
+        
+        allMenus.forEach(m => {
+            if (m.id !== 'dd-menu-' + id) {
+                m.classList.add('hidden');
+            }
+        });
+
+        menu.classList.toggle('hidden');
+    }
+
+    // Close dropdowns on window click
+    window.onclick = function(event) {
+        if (!event.target.closest('[id^="dd-container-"]')) {
+            const dropdowns = document.querySelectorAll('[id^="dd-menu-"]');
+            dropdowns.forEach(d => d.classList.add('hidden'));
+        }
+    }
+</script>
+
+{{ template "footer" . }}
+{{ end }}

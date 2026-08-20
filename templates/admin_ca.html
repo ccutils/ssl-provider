@@ -1,0 +1,259 @@
+{{ define "admin_ca.html" }}
+{{ template "header" . }}
+
+<div class="space-y-6">
+    <!-- Header banner -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-building-shield text-brand-400"></i> Certificate Authority (CA) Manager
+            </h2>
+            <p class="text-sm text-slate-400">Initialize Root CA chains and Intermediate CAs used to sign leaf/user certificates.</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="openRootModal()" class="px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 rounded-lg text-sm font-semibold transition">
+                Generate Root CA
+            </button>
+            <button onclick="openIntModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-sm font-semibold shadow-lg shadow-brand-600/20 transition">
+                Generate Intermediate CA
+            </button>
+        </div>
+    </div>
+
+    <!-- CAs Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Root CAs -->
+        <div class="glass-card rounded-xl p-6 space-y-4">
+            <div class="border-b border-slate-800 pb-2 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-seedling text-indigo-400"></i> Root CAs
+                </h3>
+                <span class="text-xs text-slate-500">Self-Signed Authorities</span>
+            </div>
+            
+            {{ if not .rootCAs }}
+            <div class="p-8 text-center border border-dashed border-slate-800 rounded-lg text-slate-500 text-sm">
+                <i class="fa-solid fa-folder-open text-2xl mb-2 block text-slate-600"></i>
+                No Root CAs generated yet. Click "Generate Root CA" to begin.
+            </div>
+            {{ else }}
+            <div class="space-y-3">
+                {{ range .rootCAs }}
+                <div class="p-4 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center justify-between">
+                    <div class="relative group">
+                        <div class="font-semibold text-sm text-slate-200 cursor-help flex items-center gap-1.5 hover:text-brand-400 transition">
+                            <i class="fa-solid fa-circle-info text-xs text-slate-500"></i> {{ .CommonName }}
+                        </div>
+                        <div class="text-[11px] text-slate-500 mt-0.5">Created: {{ .CreatedAt.Format "2006-01-02 15:04:05" }}</div>
+
+                        <!-- Tooltip card -->
+                        <div class="absolute z-30 hidden group-hover:block w-80 p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl text-[11px] text-slate-300 space-y-2 left-0 mt-1 glow-brand backdrop-blur-md">
+                            <div class="font-bold text-slate-100 border-b border-slate-800 pb-1.5 mb-1 text-xs flex items-center gap-1.5">
+                                <i class="fa-solid fa-certificate text-indigo-400"></i> Certificate Details
+                            </div>
+                            <div><span class="text-slate-500">Subject:</span> {{ .Subject }}</div>
+                            <div><span class="text-slate-500">Issuer:</span> {{ .Issuer }}</div>
+                            <div><span class="text-slate-500">Serial:</span> <span class="font-mono">{{ .SerialNumber }}</span></div>
+                            <div><span class="text-slate-500">Not Before:</span> <span class="font-mono text-emerald-400">{{ .NotBefore }}</span></div>
+                            <div><span class="text-slate-500">Not After:</span> <span class="font-mono text-amber-400">{{ .NotAfter }}</span></div>
+                            <div><span class="text-slate-500">Algorithm:</span> <span class="font-semibold text-slate-200">{{ .KeyAlgo }}</span></div>
+                        </div>
+                    </div>
+                    <a href="/admin/ca/download/{{ .ID }}" class="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-semibold rounded-lg text-slate-300 transition flex items-center gap-1">
+                        <i class="fa-solid fa-download"></i> CRT
+                    </a>
+                </div>
+                {{ end }}
+            </div>
+            {{ end }}
+        </div>
+
+        <!-- Intermediate CAs -->
+        <div class="glass-card rounded-xl p-6 space-y-4">
+            <div class="border-b border-slate-800 pb-2 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-link text-brand-400"></i> Intermediate CAs
+                </h3>
+                <span class="text-xs text-slate-500">Signing Certificates</span>
+            </div>
+
+            {{ if not .intCAs }}
+            <div class="p-8 text-center border border-dashed border-slate-800 rounded-lg text-slate-500 text-sm">
+                <i class="fa-solid fa-folder-open text-2xl mb-2 block text-slate-600"></i>
+                No Intermediate CAs. Generate one signed by the active Root CA.
+            </div>
+            {{ else }}
+            <div class="space-y-3">
+                {{ range .intCAs }}
+                <div class="p-4 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center justify-between">
+                    <div class="relative group space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-sm text-slate-200 cursor-help flex items-center gap-1.5 hover:text-brand-400 transition">
+                                <i class="fa-solid fa-circle-info text-xs text-slate-500"></i> {{ .CommonName }}
+                            </span>
+                            {{ if .IsActive }}
+                            <span class="px-2 py-0.5 text-[9px] font-bold rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 uppercase tracking-wider">Active</span>
+                            {{ end }}
+                        </div>
+                        <div class="text-[11px] text-slate-500">Created: {{ .CreatedAt.Format "2006-01-02 15:04:05" }}</div>
+
+                        <!-- Tooltip card -->
+                        <div class="absolute z-30 hidden group-hover:block w-80 p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl text-[11px] text-slate-300 space-y-2 left-0 mt-1 glow-brand backdrop-blur-md">
+                            <div class="font-bold text-slate-100 border-b border-slate-800 pb-1.5 mb-1 text-xs flex items-center gap-1.5">
+                                <i class="fa-solid fa-certificate text-brand-400"></i> Certificate Details
+                            </div>
+                            <div><span class="text-slate-500">Subject:</span> {{ .Subject }}</div>
+                            <div><span class="text-slate-500">Issuer:</span> {{ .Issuer }}</div>
+                            <div><span class="text-slate-500">Serial:</span> <span class="font-mono">{{ .SerialNumber }}</span></div>
+                            <div><span class="text-slate-500">Not Before:</span> <span class="font-mono text-emerald-400">{{ .NotBefore }}</span></div>
+                            <div><span class="text-slate-500">Not After:</span> <span class="font-mono text-amber-400">{{ .NotAfter }}</span></div>
+                            <div><span class="text-slate-500">Algorithm:</span> <span class="font-semibold text-slate-200">{{ .KeyAlgo }}</span></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {{ if not .IsActive }}
+                        <form action="/admin/ca/activate/{{ .ID }}" method="POST">
+                            <button type="submit" class="px-2.5 py-1.5 bg-brand-600/10 border border-brand-500/20 hover:bg-brand-600 text-brand-400 hover:text-white text-xs font-semibold rounded-lg transition">
+                                Activate
+                            </button>
+                        </form>
+                        {{ end }}
+                        <a href="/admin/ca/download/{{ .ID }}" class="px-2.5 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-semibold rounded-lg text-slate-300 transition flex items-center gap-1">
+                            <i class="fa-solid fa-download"></i> CRT
+                        </a>
+                    </div>
+                </div>
+                {{ end }}
+            </div>
+            {{ end }}
+        </div>
+    </div>
+
+    <!-- Generate Root CA Modal -->
+    <div id="root-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-6 glow-brand">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+                <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-seedling text-indigo-400"></i> Generate Root CA
+                </h3>
+                <button onclick="closeRootModal()" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form action="/admin/ca/root/generate" method="POST" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Common Name (CN)</label>
+                    <input type="text" name="common_name" required placeholder="SSL Provider Root CA" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Organization</label>
+                        <input type="text" name="organization" required placeholder="My Enterprise" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Country Code (2 char)</label>
+                        <input type="text" name="country" required max-length="2" placeholder="US" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Validity (Years)</label>
+                        <input type="number" name="validity_years" required value="10" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Key Spec</label>
+                        <select name="key_type" required class="w-full px-3 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-brand-500 transition text-sm">
+                            <option value="ecdsa">ECDSA P-256 (Modern)</option>
+                            <option value="rsa2048">RSA 2048 (Legacy)</option>
+                            <option value="rsa4096">RSA 4096 (Secure)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeRootModal()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 font-medium text-sm transition text-slate-300">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm shadow-lg shadow-brand-600/20 transition">Generate CA</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Generate Intermediate CA Modal -->
+    <div id="int-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-6 glow-brand">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+                <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-link text-brand-400"></i> Generate Intermediate CA
+                </h3>
+                <button onclick="closeIntModal()" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form action="/admin/ca/intermediate/generate" method="POST" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Parent Root CA</label>
+                    <select name="parent_ca_id" required class="w-full px-3 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-brand-500 transition text-sm">
+                        {{ range .rootCAs }}
+                        <option value="{{ .ID }}">{{ .CommonName }} (ID: {{ .ID }})</option>
+                        {{ else }}
+                        <option value="" disabled>No Root CAs generated yet - please generate one first</option>
+                        {{ end }}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Common Name (CN)</label>
+                    <input type="text" name="common_name" required placeholder="SSL Provider Intermediate CA" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Organization</label>
+                        <input type="text" name="organization" required placeholder="My Enterprise" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Country Code (2 char)</label>
+                        <input type="text" name="country" required max-length="2" placeholder="US" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Validity (Years)</label>
+                        <input type="number" name="validity_years" required value="5" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 transition text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Key Spec</label>
+                        <select name="key_type" required class="w-full px-3 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-brand-500 transition text-sm">
+                            <option value="ecdsa">ECDSA P-256 (Modern)</option>
+                            <option value="rsa2048">RSA 2048 (Legacy)</option>
+                            <option value="rsa4096">RSA 4096 (Secure)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeIntModal()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 font-medium text-sm transition text-slate-300">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm shadow-lg shadow-brand-600/20 transition">Generate Intermediate CA</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openRootModal() {
+        document.getElementById('root-modal').classList.remove('hidden');
+    }
+    function closeRootModal() {
+        document.getElementById('root-modal').classList.add('hidden');
+    }
+    function openIntModal() {
+        document.getElementById('int-modal').classList.remove('hidden');
+    }
+    function closeIntModal() {
+        document.getElementById('int-modal').classList.add('hidden');
+    }
+
+    // Modal click-off handler
+    document.getElementById('root-modal').onclick = function(e) {
+        if(e.target === this) closeRootModal();
+    }
+    document.getElementById('int-modal').onclick = function(e) {
+        if(e.target === this) closeIntModal();
+    }
+</script>
+
+{{ template "footer" . }}
+{{ end }}
